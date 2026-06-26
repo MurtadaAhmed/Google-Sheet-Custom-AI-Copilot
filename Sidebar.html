@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        height: 95vh;
+        box-sizing: border-box;
+      }
+
+      h3 {
+        margin-top: 0;
+        margin-bottom: 8px;
+      }
+
+      p {
+        margin-top: 0;
+      }
+
+      #sheet-selector {
+        display: flex;
+        flex-direction: column;
+      }
+
+      #chat-container {
+        display: none;
+        flex-direction: column;
+        flex-grow: 1;
+        height: 100%;
+      }
+
+      #sheet-search {
+        margin-bottom: 8px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      #sheet-list, #scope-editor-list {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        background: #f9f9f9;
+        max-height: 180px;
+        overflow-y: auto;
+      }
+
+      .sheet-option {
+        margin-bottom: 6px;
+        font-size: 14px;
+      }
+
+      .sheet-toolbar {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+
+      #selected-sheets-banner {
+        font-size: 12px;
+        color: #1a73e8;
+        margin-bottom: 8px;
+        background: #eef3fd;
+        padding: 6px 8px;
+        border-radius: 4px;
+        line-height: 1.4;
+      }
+
+      #chat-history {
+        flex-grow: 1;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        background: #f9f9f9;
+      }
+
+      .message {
+        margin-bottom: 10px;
+        padding: 8px;
+        border-radius: 5px;
+        line-height: 1.4;
+        font-size: 14px;
+        word-wrap: break-word;
+      }
+
+      .user-msg {
+        background-color: #d2e3fc;
+        text-align: right;
+        margin-left: 20px;
+      }
+
+      .ai-msg {
+        background-color: #e8eaed;
+        text-align: left;
+        margin-right: 20px;
+      }
+
+      .system-action {
+        font-size: 11px;
+        color: #1aa260;
+        margin-top: 6px;
+        font-style: italic;
+        border-top: 1px dashed #ccc;
+        padding-top: 4px;
+      }
+
+      .warning-action {
+        font-size: 11px;
+        color: #b06000;
+        margin-top: 6px;
+        font-style: italic;
+        border-top: 1px dashed #ccc;
+        padding-top: 4px;
+      }
+
+      .usage-action {
+        font-size: 11px;
+        color: #5f6368;
+        margin-top: 6px;
+        border-top: 1px dashed #ccc;
+        padding-top: 4px;
+      }
+
+      .loading {
+        font-style: italic;
+        color: #666;
+        font-size: 12px;
+      }
+
+      #input-area {
+        display: flex;
+        gap: 5px;
+      }
+
+      input[type="text"] {
+        flex-grow: 1;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      button {
+        padding: 8px 12px;
+        background: #1a73e8;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #1557b0;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .secondary-btn {
+        background: #5f6368;
+      }
+
+      .secondary-btn:hover {
+        background: #3c4043;
+      }
+
+      .danger-btn {
+        background: #c5221f;
+      }
+
+      .danger-btn:hover {
+        background: #9e1b18;
+      }
+
+      .subtle-note {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+      }
+
+      details {
+        margin-top: 8px;
+        margin-bottom: 8px;
+      }
+
+      summary {
+        cursor: pointer;
+        font-size: 12px;
+        color: #1a73e8;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #eef3fd;
+        color: #1a73e8;
+        font-size: 12px;
+        margin: 2px 4px 2px 0;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div id="sheet-selector">
+      <h3>Select sheets for AI scope</h3>
+      <p style="font-size: 13px; color: #555;">
+        Choose which tabs the chatbot is allowed to read and modify. It may also create new output sheets if needed.
+      </p>
+
+      <input type="text" id="sheet-search" placeholder="Search sheets..." oninput="filterSheetList(this.value)">
+
+      <div class="sheet-toolbar">
+        <button type="button" onclick="selectAllSheets()">Select All</button>
+        <button type="button" class="secondary-btn" onclick="clearAllSheets()">Clear</button>
+      </div>
+
+      <div id="sheet-list">Loading sheets...</div>
+
+      <button id="start-chat-btn" onclick="startChat()">Start Chat</button>
+      <div class="subtle-note">Selected scope is remembered when you reopen the sidebar.</div>
+    </div>
+
+    <div id="chat-container">
+      <div id="selected-sheets-banner"></div>
+
+      <details>
+        <summary>Manage active scope</summary>
+        <input
+          type="text"
+          id="scope-search"
+          placeholder="Search sheets..."
+          oninput="filterScopeEditorList(this.value)"
+          style="width:100%; margin-top:8px; margin-bottom:8px; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;">
+        <div id="scope-editor-list"></div>
+        <div class="sheet-toolbar">
+          <button type="button" onclick="applyScopeChanges()">Apply Scope Changes</button>
+          <button type="button" class="secondary-btn" onclick="reloadScopeEditor()">Refresh List</button>
+        </div>
+        <div class="subtle-note">Changes here update the active scope without resetting the chat.</div>
+      </details>
+
+      <div id="chat-history"></div>
+
+      <div id="input-area">
+        <input
+          type="text"
+          id="user-input"
+          placeholder="e.g., Build a dashboard for the selected sheets..."
+          onkeydown="if(event.key === 'Enter') sendMessage()">
+        <button id="send-btn" onclick="sendMessage()">Send</button>
+      </div>
+
+      <div style="margin-top: 8px;" class="sheet-toolbar">
+        <button class="secondary-btn" onclick="goBackToSheetSelection()">Change Sheet Selection</button>
+        <button class="danger-btn" onclick="resetSession()">Reset Session</button>
+      </div>
+    </div>
+
+    <script>
+      let sessionHistory = [];
+      let selectedSheets = [];
+      let allSheetNames = [];
+      let isLoading = false;
+
+      window.onload = function() {
+        initializeSidebar();
+      };
+
+      function initializeSidebar() {
+        google.script.run
+          .withSuccessHandler(function(state) {
+            allSheetNames = Array.isArray(state.allSheetNames) ? state.allSheetNames : [];
+            selectedSheets = Array.isArray(state.selectedSheets) ? state.selectedSheets : [];
+            sessionHistory = Array.isArray(state.sessionHistory) ? state.sessionHistory : [];
+
+            renderSheetOptions(allSheetNames, selectedSheets);
+            renderScopeEditor(allSheetNames, selectedSheets);
+
+            if (selectedSheets.length > 0) {
+              openChatView(false);
+              rebuildChatFromHistory();
+            } else {
+              document.getElementById('sheet-selector').style.display = 'flex';
+              document.getElementById('chat-container').style.display = 'none';
+            }
+          })
+          .withFailureHandler(function(error) {
+            document.getElementById('sheet-list').innerHTML = 'Failed to load sidebar state.';
+          })
+          .getSidebarState();
+      }
+
+      function renderSheetOptions(sheetNames, preselected) {
+        const container = document.getElementById('sheet-list');
+        if (!sheetNames || sheetNames.length === 0) {
+          container.innerHTML = 'No sheets found.';
+          return;
+        }
+
+        container.innerHTML = '';
+        sheetNames.forEach(function(name) {
+          const row = document.createElement('div');
+          row.className = 'sheet-option';
+          row.setAttribute('data-sheet-name', name.toLowerCase());
+
+          const label = document.createElement('label');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = name;
+          checkbox.checked = preselected.includes(name);
+
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(' ' + name));
+          row.appendChild(label);
+          container.appendChild(row);
+        });
+      }
+
+      function renderScopeEditor(sheetNames, activeScope) {
+        const container = document.getElementById('scope-editor-list');
+        container.innerHTML = '';
+
+        if (!sheetNames || sheetNames.length === 0) {
+          container.innerHTML = 'No sheets found.';
+          return;
+        }
+
+        sheetNames.forEach(function(name) {
+          const row = document.createElement('div');
+          row.className = 'sheet-option';
+          row.setAttribute('data-sheet-name', name.toLowerCase());
+
+          const label = document.createElement('label');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = name;
+          checkbox.checked = activeScope.includes(name);
+
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(' ' + name));
+          row.appendChild(label);
+          container.appendChild(row);
+        });
+      }
+
+      function reloadScopeEditor() {
+        google.script.run
+          .withSuccessHandler(function(names) {
+            allSheetNames = Array.isArray(names) ? names : [];
+            selectedSheets = selectedSheets.filter(name => allSheetNames.includes(name));
+            renderScopeEditor(allSheetNames, selectedSheets);
+            renderSheetOptions(allSheetNames, selectedSheets);
+            updateSelectedSheetsBanner();
+          })
+          .withFailureHandler(function() {
+            alert('Failed to refresh sheet list.');
+          })
+          .getSheetNames();
+      }
+
+      function filterSheetList(query) {
+        filterCheckboxContainer('sheet-list', query);
+      }
+
+      function filterScopeEditorList(query) {
+        filterCheckboxContainer('scope-editor-list', query);
+      }
+
+      function filterCheckboxContainer(containerId, query) {
+        const q = String(query || '').toLowerCase();
+        const rows = document.querySelectorAll(`#${containerId} .sheet-option`);
+        rows.forEach(row => {
+          const name = row.getAttribute('data-sheet-name') || '';
+          row.style.display = name.includes(q) ? '' : 'none';
+        });
+      }
+
+      function selectAllSheets() {
+        const checkboxes = document.querySelectorAll('#sheet-list input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = true);
+      }
+
+      function clearAllSheets() {
+        const checkboxes = document.querySelectorAll('#sheet-list input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = false);
+      }
+
+      function startChat() {
+        const checked = Array.from(document.querySelectorAll('#sheet-list input[type="checkbox"]:checked'));
+        const nextSelected = checked.map(cb => cb.value);
+
+        if (nextSelected.length === 0) {
+          alert('Please select at least one sheet.');
+          return;
+        }
+
+        selectedSheets = nextSelected;
+        sessionHistory = [];
+
+        persistState(function() {
+          openChatView(true);
+        });
+      }
+
+      function openChatView(resetIntro) {
+        document.getElementById('sheet-selector').style.display = 'none';
+        document.getElementById('chat-container').style.display = 'flex';
+
+        updateSelectedSheetsBanner();
+        renderScopeEditor(allSheetNames, selectedSheets);
+
+        if (resetIntro || sessionHistory.length === 0) {
+          document.getElementById('chat-history').innerHTML = `
+            <div class="message ai-msg">
+              Hello! I will only work with these selected sheets: <b>${escapeHtml(selectedSheets.join(', '))}</b><br><br>
+              I can also create new output sheets if needed, and those new sheets will automatically be added to this session's scope.<br><br>
+              What would you like me to do?
+            </div>
+          `;
+        }
+      }
+
+      function rebuildChatFromHistory() {
+        openChatView(false);
+
+        const history = document.getElementById('chat-history');
+        history.innerHTML = `
+          <div class="message ai-msg">
+            Welcome back. Active scope: <b>${escapeHtml(selectedSheets.join(', '))}</b>
+          </div>
+        `;
+
+        sessionHistory.forEach(item => {
+          if (!item || !item.role) return;
+
+          if (item.role === 'user') {
+            appendMessage(item.content || '', 'user-msg');
+          } else if (item.role === 'assistant') {
+            if (item.displayHtml) {
+              appendHtmlMessage(item.displayHtml, 'ai-msg');
+            } else if (item.content) {
+              appendHtmlMessage(escapeHtml(item.content).replace(/\n/g, '<br>'), 'ai-msg');
+            }
+          }
+        });
+      }
+
+      function updateSelectedSheetsBanner() {
+        const banner = document.getElementById('selected-sheets-banner');
+        const pills = selectedSheets.map(name => `<span class="pill">${escapeHtml(name)}</span>`).join('');
+        banner.innerHTML = `<b>Active scope:</b> ${pills || '(none)'}`;
+      }
+
+      function applyScopeChanges() {
+        const checked = Array.from(document.querySelectorAll('#scope-editor-list input[type="checkbox"]:checked'));
+        const updated = checked.map(cb => cb.value);
+
+        if (updated.length === 0) {
+          alert('Please keep at least one sheet in scope.');
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(function(serverSelected) {
+            selectedSheets = Array.isArray(serverSelected) ? serverSelected : updated;
+            persistState(function() {
+              updateSelectedSheetsBanner();
+              renderScopeEditor(allSheetNames, selectedSheets);
+              renderSheetOptions(allSheetNames, selectedSheets);
+              appendHtmlMessage(
+                `<div class="system-action">Updated active scope: ${escapeHtml(selectedSheets.join(', '))}</div>`,
+                'ai-msg'
+              );
+            });
+          })
+          .withFailureHandler(function(error) {
+            alert('Failed to update selected sheets.');
+          })
+          .updateSelectedSheets(updated);
+      }
+
+      function goBackToSheetSelection() {
+        document.getElementById('chat-container').style.display = 'none';
+        document.getElementById('sheet-selector').style.display = 'flex';
+        renderSheetOptions(allSheetNames, selectedSheets);
+      }
+
+      function resetSession() {
+        if (!confirm('Reset chat session and saved scope?')) return;
+
+        selectedSheets = [];
+        sessionHistory = [];
+        google.script.run
+          .withSuccessHandler(function() {
+            document.getElementById('chat-history').innerHTML = '';
+            document.getElementById('chat-container').style.display = 'none';
+            document.getElementById('sheet-selector').style.display = 'flex';
+            initializeSidebar();
+          })
+          .withFailureHandler(function() {
+            alert('Failed to reset session.');
+          })
+          .clearSidebarState();
+      }
+
+      function setLoadingState(loading) {
+        isLoading = loading;
+        const sendBtn = document.getElementById('send-btn');
+        const startBtn = document.getElementById('start-chat-btn');
+        const input = document.getElementById('user-input');
+
+        if (sendBtn) sendBtn.disabled = loading;
+        if (startBtn) startBtn.disabled = loading;
+        if (input) input.disabled = loading;
+      }
+
+      function sendMessage() {
+        if (isLoading) return;
+
+        const inputField = document.getElementById('user-input');
+        const text = inputField.value.trim();
+
+        if (!text) return;
+        if (!selectedSheets || selectedSheets.length === 0) {
+          alert('Please select at least one sheet first.');
+          return;
+        }
+
+        appendMessage(text, 'user-msg');
+        inputField.value = '';
+
+        sessionHistory.push({
+          role: 'user',
+          content: text
+        });
+
+        persistState();
+
+        const loadingId = appendMessage('Thinking and modifying selected sheet(s)...', 'ai-msg loading');
+        setLoadingState(true);
+
+        google.script.run
+          .withSuccessHandler(function(responseString) {
+            const loadingEl = document.getElementById(loadingId);
+            if (loadingEl) loadingEl.remove();
+
+            setLoadingState(false);
+
+            try {
+              const data = JSON.parse(responseString);
+
+              if (data.updatedScope && Array.isArray(data.updatedScope)) {
+                selectedSheets = data.updatedScope.slice();
+              } else {
+                if (Array.isArray(data.newlyAddedSheets)) {
+                  data.newlyAddedSheets.forEach(name => {
+                    if (!selectedSheets.includes(name)) selectedSheets.push(name);
+                  });
+                }
+                if (Array.isArray(data.deletedSheets) && data.deletedSheets.length > 0) {
+                  selectedSheets = selectedSheets.filter(name => !data.deletedSheets.includes(name));
+                }
+              }
+
+              updateSelectedSheetsBanner();
+
+              google.script.run
+                .withSuccessHandler(function(names) {
+                  allSheetNames = Array.isArray(names) ? names : allSheetNames;
+                  renderScopeEditor(allSheetNames, selectedSheets);
+                  renderSheetOptions(allSheetNames, selectedSheets);
+                })
+                .getSheetNames();
+
+              let displayHtml = escapeHtml(data.message || '').replace(/\n/g, '<br>');
+
+              if (data.edits && data.edits.length > 0) {
+                displayHtml += `<div class="system-action">Applied ${data.edits.length} modification(s).</div>`;
+              }
+
+              if (Array.isArray(data.scopeChanges) && data.scopeChanges.length > 0) {
+                displayHtml += `<div class="system-action">${data.scopeChanges.map(escapeHtml).join('<br>')}</div>`;
+              }
+
+              if (data.machineSummary && Array.isArray(data.machineSummary.warnings) && data.machineSummary.warnings.length > 0) {
+                displayHtml += `<div class="warning-action">${data.machineSummary.warnings.map(escapeHtml).join('<br>')}</div>`;
+              }
+
+              if (data.usage) {
+                const requestBytes = data.usage.requestBytes !== undefined ? data.usage.requestBytes : '';
+                const responseBytes = data.usage.responseBytes !== undefined ? data.usage.responseBytes : '';
+                const usageBits = [];
+                if (requestBytes !== '') usageBits.push(`requestBytes=${escapeHtml(String(requestBytes))}`);
+                if (responseBytes !== '') usageBits.push(`responseBytes=${escapeHtml(String(responseBytes))}`);
+                if (usageBits.length > 0) {
+                  displayHtml += `<div class="usage-action">Usage: ${usageBits.join(' | ')}</div>`;
+                }
+              }
+
+              appendHtmlMessage(displayHtml, 'ai-msg');
+
+              sessionHistory.push({
+                role: 'assistant',
+                content: data.message || '',
+                machinePayload: responseString,
+                displayHtml: displayHtml
+              });
+
+              persistState();
+            } catch (e) {
+              appendHtmlMessage(
+                'Frontend error after backend response: ' + escapeHtml(String(e)) +
+                `<div class="warning-action">Raw response: ${escapeHtml(responseString)}</div>`,
+                'ai-msg'
+              );
+            }
+          })
+          .withFailureHandler(function(error) {
+            const loadingEl = document.getElementById(loadingId);
+            if (loadingEl) loadingEl.remove();
+
+            setLoadingState(false);
+
+            let msg = 'Error connecting to backend.';
+            if (error && error.message) msg += ' ' + error.message;
+            else if (error) msg += ' ' + String(error);
+
+            appendHtmlMessage(escapeHtml(msg), 'ai-msg');
+          })
+          .processChat(
+            sessionHistory.map(item => ({
+              role: item.role,
+              content: item.content || ''
+            })),
+            selectedSheets
+          );
+      }
+
+      function persistState(callback) {
+        google.script.run
+          .withSuccessHandler(function() {
+            if (typeof callback === 'function') callback();
+          })
+          .withFailureHandler(function() {})
+          .saveSidebarState(selectedSheets, sessionHistory);
+      }
+
+      function appendMessage(text, className) {
+        const history = document.getElementById('chat-history');
+        const div = document.createElement('div');
+        div.className = 'message ' + className;
+        div.textContent = text;
+
+        const id = 'msg-' + Math.random().toString(36).substr(2, 9);
+        div.id = id;
+
+        history.appendChild(div);
+        history.scrollTop = history.scrollHeight;
+        return id;
+      }
+
+      function appendHtmlMessage(html, className) {
+        const history = document.getElementById('chat-history');
+        const div = document.createElement('div');
+        div.className = 'message ' + className;
+        div.innerHTML = html;
+        history.appendChild(div);
+        history.scrollTop = history.scrollHeight;
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+    </script>
+  </body>
+</html>
