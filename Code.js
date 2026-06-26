@@ -1389,6 +1389,8 @@ CONTEXT GUIDANCE:
 SUPPORTED EDITS:
 - Structural: addSheet, deleteSheet, renameSheet, duplicateSheet, moveSheet
 - Sheet: freeze, clear, clearContent, clearCharts
+  freeze REQUIRED fields: action, sheetName, and at least one of frozenRows or frozenColumns (integer, 0 to unfreeze).
+  Example: {"action": "freeze", "sheetName": "Sheet1", "frozenRows": 1, "frozenColumns": 0}
 - Data: appendRow, appendRows
 - Protection: protectRange
 - Merge: merge, unmerge
