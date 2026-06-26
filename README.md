@@ -1,6 +1,6 @@
 # Google Sheets AI Copilot
 
-An AI chat assistant that lives inside your Google Sheet. You talk to it in a sidebar, it reads your data, and it can make changes to your spreadsheet directly — adding data, building dashboards, applying formatting, creating charts, writing formulas, and more.
+An AI chat assistant that lives inside your Google Sheet. You talk to it in a sidebar, it reads your data, and it can make changes to your spreadsheet directly: adding data, building dashboards, applying formatting, creating charts, writing formulas, and more.
 
 ![Google Sheet AI Assistance](image.png)
 
@@ -9,7 +9,7 @@ An AI chat assistant that lives inside your Google Sheet. You talk to it in a si
 ## What it does
 
 - Opens a chat panel inside any Google Sheet (no external tools or browser extensions needed)
-- You tell it what you want in plain language — it figures out the steps and does the work
+- You tell it what you want in plain language and it figures out the steps and does the work
 - You choose which sheets it is allowed to read and edit; it cannot touch anything outside that selection
 - It can create new sheets (for summaries, dashboards, reports) and immediately write to them
 - If it writes a formula that produces an error, it automatically detects the problem and fixes it without you having to ask
@@ -30,10 +30,10 @@ An AI chat assistant that lives inside your Google Sheet. You talk to it in a si
 
 1. You open the chat panel and select which sheets the AI is allowed to work with.
 2. You type a message describing what you want.
-3. The script reads your selected sheets and sends the data — along with your message — to an AI model via an API you configure.
+3. The script reads your selected sheets and sends the data, along with your message, to an AI model via an API you configure.
 4. The AI replies with a structured list of changes to make.
 5. The script applies those changes directly to your spreadsheet.
-6. If any formula it wrote is broken, it automatically sends a follow-up to the AI to fix it, then applies the correction — all before the response appears in your chat.
+6. If any formula it wrote is broken, it automatically sends a follow-up to the AI to fix it and applies the correction, all before the response appears in your chat.
 
 ---
 
@@ -46,7 +46,7 @@ An AI chat assistant that lives inside your Google Sheet. You talk to it in a si
 
 ## Setup
 
-### Step 1 — Copy the code into Apps Script
+### Step 1: Copy the code into Apps Script
 
 1. Open (or create) the Google Sheet you want to use.
 2. Click **Extensions → Apps Script** in the top menu.
@@ -55,9 +55,9 @@ An AI chat assistant that lives inside your Google Sheet. You talk to it in a si
 5. Click the **+** icon next to "Files" in the left sidebar and choose **HTML**. Name it exactly `Sidebar` (no extension). Delete the default content and paste in the contents of **`Sidebar.html`**.
 6. Click **Save** (the floppy disk icon, or `Ctrl+S` / `Cmd+S`).
 
-### Step 2 — Add your API settings
+### Step 2: Add your API settings
 
-The script needs three pieces of information to connect to your AI provider. These are stored in **Script Properties** — a secure settings area inside Apps Script that is never visible to anyone who views the spreadsheet or the code.
+The script needs three pieces of information to connect to your AI provider. These are stored in **Script Properties**, a secure settings area inside Apps Script that is never visible to anyone who views the spreadsheet or the code.
 
 1. In the Apps Script editor, click the **⚙ Project Settings** icon in the left sidebar.
 2. Scroll down to the **Script Properties** section.
@@ -81,7 +81,7 @@ The script needs three pieces of information to connect to your AI provider. The
 
 > Any provider that accepts the standard OpenAI `POST /chat/completions` message format will work.
 
-### Step 3 — Reload the sheet and open the assistant
+### Step 3: Reload the sheet and open the assistant
 
 1. Close the Apps Script editor tab.
 2. Reload your Google Sheet.
@@ -98,14 +98,14 @@ The script needs three pieces of information to connect to your AI provider. The
 When you first open the sidebar you will see a list of all the tabs in your spreadsheet. Check the ones you want the AI to be able to read and modify, then click **Start Chat**.
 
 - The AI can only see and edit the sheets you selected. Everything else is off-limits.
-- If you ask it to, it can create brand new sheets for output (dashboards, summaries, etc.) — those are automatically added to its working scope.
+- If you ask it to, it can create brand new sheets for output (dashboards, summaries, etc.) and they are automatically added to its working scope.
 - Your selection is saved and restored next time you open the sidebar.
 
 ### Chatting
 
 Type your request in the text box at the bottom and press **Enter** or click **Send**. The assistant will think, make the changes, and tell you what it did.
 
-You can have a back-and-forth conversation — it remembers the context of the current session, so you can say things like *"now sort it by date"* or *"do the same for Sheet2"* without explaining everything again.
+You can have a back-and-forth conversation. It remembers the context of the current session, so you can say things like *"now sort it by date"* or *"do the same for Sheet2"* without explaining everything again.
 
 ### Managing scope mid-conversation
 
@@ -113,8 +113,8 @@ Click **Manage active scope** (the collapsible section at the top of the chat vi
 
 ### Resetting
 
-- **Change Sheet Selection** — goes back to the sheet picker without clearing the chat history.
-- **Reset Session** — clears the chat history and the selected sheets entirely. Useful for starting a fresh task.
+- **Change Sheet Selection**: goes back to the sheet picker without clearing the chat history.
+- **Reset Session**: clears the chat history and the selected sheets entirely. Useful for starting a fresh task.
 
 ---
 
