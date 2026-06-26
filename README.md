@@ -42,6 +42,7 @@ Below is an example dashboard with charts generated completely by the AI chatbot
 
 ![Dashboard example](image-1.png)
 
+![Dashboard example](image-2.png)
 ---
 
 ## Requirements
