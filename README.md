@@ -37,6 +37,13 @@ An AI chat assistant that lives inside your Google Sheet. You talk to it in a si
 
 ---
 
+## Example
+Below is an example dashboard with charts generated completely by the AI chatbot using a table in another tab:
+
+![Dashboard example](image-1.png)
+
+---
+
 ## Requirements
 
 - A Google account with access to Google Sheets and Google Apps Script
