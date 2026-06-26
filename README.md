@@ -2,7 +2,7 @@
 
 An AI chat assistant that lives inside your Google Sheet. You talk to it in a sidebar, it reads your data, and it can make changes to your spreadsheet directly — adding data, building dashboards, applying formatting, creating charts, writing formulas, and more.
 
-![sidebar chat panel](https://via.placeholder.com/700x400?text=Screenshot+coming+soon)
+![Google Sheet AI Assistance](image.png)
 
 ---
 
