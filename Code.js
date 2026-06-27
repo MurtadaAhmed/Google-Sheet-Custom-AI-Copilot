@@ -653,8 +653,10 @@ function buildConditionalFormatRule(targetRange, conditionalFormat) {
     ruleBuilder.whenDateBefore(new Date(conditionalFormat.value));
   } else if (type === "dateAfter") {
     ruleBuilder.whenDateAfter(new Date(conditionalFormat.value));
-  } else if (type === "customFormula" && conditionalFormat.formula) {
-    ruleBuilder.whenFormulaSatisfied(conditionalFormat.formula);
+  } else if (type === "customFormula") {
+    const formula = conditionalFormat.formula || conditionalFormat.formulaString || conditionalFormat.condition || conditionalFormat.expression;
+    if (!formula) throw new Error("customFormula type requires a 'formula' field (e.g. =$C2>320)");
+    ruleBuilder.whenFormulaSatisfied(formula);
   } else {
     throw new Error("Unsupported conditionalFormat type: " + type);
   }
@@ -678,10 +680,23 @@ function replaceOrAppendConditionalFormatRule(targetSheet, targetRange, conditio
 }
 
 function clearConditionalFormatRulesForRange(targetSheet, targetRange) {
-  const a1 = targetRange.getA1Notation();
+  const tr1 = targetRange.getRow();
+  const tc1 = targetRange.getColumn();
+  const tr2 = tr1 + targetRange.getNumRows() - 1;
+  const tc2 = tc1 + targetRange.getNumColumns() - 1;
+  const sheetName = targetSheet.getName();
+
   const rules = targetSheet.getConditionalFormatRules().filter(rule => {
     const ranges = rule.getRanges() || [];
-    return !ranges.some(r => r.getA1Notation() === a1 && r.getSheet().getName() === targetSheet.getName());
+    return !ranges.some(r => {
+      if (r.getSheet().getName() !== sheetName) return false;
+      const rr1 = r.getRow();
+      const rc1 = r.getColumn();
+      const rr2 = rr1 + r.getNumRows() - 1;
+      const rc2 = rc1 + r.getNumColumns() - 1;
+      // Remove rule if its range intersects the target range
+      return rr1 <= tr2 && rr2 >= tr1 && rc1 <= tc2 && rc2 >= tc1;
+    });
   });
   targetSheet.setConditionalFormatRules(rules);
 }
@@ -730,8 +745,12 @@ function setRichFormatting(targetRange, edit) {
   }
 }
 
-function applyDataValidation(targetRange, edit) {
+function applyDataValidation(targetRange, edit, state) {
   if (!edit.dataValidation) return;
+
+  const allowedSheets = state
+    ? [].concat(state.allowedReadSheets || [], state.activeWritableSheets || [])
+    : null;
 
   let rule;
   if (edit.dataValidation.type === "dropdown" && Array.isArray(edit.dataValidation.values)) {
@@ -740,6 +759,10 @@ function applyDataValidation(targetRange, edit) {
     if (edit.dataValidation.helpText) rule.setHelpText(edit.dataValidation.helpText);
     targetRange.setDataValidation(rule.build());
   } else if (edit.dataValidation.type === "dropdownFromRange" && edit.dataValidation.sourceSheet && edit.dataValidation.sourceRange) {
+    if (allowedSheets && !allowedSheets.includes(edit.dataValidation.sourceSheet)) {
+      if (state) state.executionWarnings.push(`Data validation rejected: sourceSheet "${edit.dataValidation.sourceSheet}" is not in scope.`);
+      return;
+    }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sourceSheet = ss.getSheetByName(edit.dataValidation.sourceSheet);
     if (sourceSheet) {
@@ -747,6 +770,24 @@ function applyDataValidation(targetRange, edit) {
         .requireValueInRange(sourceSheet.getRange(edit.dataValidation.sourceRange), true);
       if (edit.dataValidation.helpText) rule.setHelpText(edit.dataValidation.helpText);
       targetRange.setDataValidation(rule.build());
+    } else if (state) {
+      state.executionWarnings.push(`Data validation skipped: sourceSheet "${edit.dataValidation.sourceSheet}" not found.`);
+    }
+  } else if (edit.dataValidation.type === "dropdownFromNamedRange" && edit.dataValidation.namedRangeName) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const namedRange = ss.getRangeByName(edit.dataValidation.namedRangeName);
+    if (namedRange) {
+      const backingSheet = namedRange.getSheet().getName();
+      if (allowedSheets && !allowedSheets.includes(backingSheet)) {
+        if (state) state.executionWarnings.push(`Data validation rejected: named range "${edit.dataValidation.namedRangeName}" references out-of-scope sheet "${backingSheet}".`);
+        return;
+      }
+      rule = SpreadsheetApp.newDataValidation()
+        .requireValueInRange(namedRange, true);
+      if (edit.dataValidation.helpText) rule.setHelpText(edit.dataValidation.helpText);
+      targetRange.setDataValidation(rule.build());
+    } else if (state) {
+      state.executionWarnings.push(`Data validation skipped: named range "${edit.dataValidation.namedRangeName}" not found. If created via addNamedRange in the same response, ensure that edit appears first.`);
     }
   } else if (edit.dataValidation.type === "checkbox") {
     rule = SpreadsheetApp.newDataValidation().requireCheckbox();
@@ -853,6 +894,11 @@ function handleFreezeClearAppendProtectActions(spreadsheet, edit, state) {
     return true;
   }
 
+  if (edit.action === "clearConditionalFormat" && !edit.range) {
+    targetSheet.setConditionalFormatRules([]);
+    return true;
+  }
+
   if (edit.action === "appendRow" && Array.isArray(edit.values)) {
     targetSheet.appendRow(edit.values);
     return true;
@@ -921,6 +967,7 @@ function handleMergeResizeNamedRangeActions(spreadsheet, edit, state) {
   if (edit.action === "unmerge" && edit.range) {
     const r = targetSheet.getRange(edit.range);
     cleanupOverlappingMergedRanges(targetSheet, r);
+    r.breakApart();
     return true;
   }
 
@@ -1219,7 +1266,7 @@ function handleCellRangeActions(spreadsheet, edit, state) {
   // --- SAFE FORMATTING ISOLATION ---
   try {
     setRichFormatting(targetRange, edit);
-    applyDataValidation(targetRange, edit);
+    applyDataValidation(targetRange, edit, state);
 
     if (edit.conditionalFormat) {
       replaceOrAppendConditionalFormatRule(
@@ -1276,11 +1323,18 @@ function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
     const edit = edits[i];
     if (!edit || typeof edit !== 'object') continue;
 
-    if (handleSheetStructureAction(spreadsheet, edit, state)) continue;
-    if (handleFreezeClearAppendProtectActions(spreadsheet, edit, state)) continue;
-    if (handleMergeResizeNamedRangeActions(spreadsheet, edit, state)) continue;
-    if (handleChartActions(spreadsheet, edit, state)) continue;
-    if (handleCellRangeActions(spreadsheet, edit, state)) continue;
+    const handled =
+      handleSheetStructureAction(spreadsheet, edit, state) ||
+      handleFreezeClearAppendProtectActions(spreadsheet, edit, state) ||
+      handleMergeResizeNamedRangeActions(spreadsheet, edit, state) ||
+      handleChartActions(spreadsheet, edit, state) ||
+      handleCellRangeActions(spreadsheet, edit, state);
+
+    if (!handled) {
+      const target = edit.sheetName || '(no sheet)';
+      const action = edit.action || (edit.range ? 'range edit on ' + edit.range : 'unknown');
+      state.executionWarnings.push(`Edit ${i + 1} was not applied — sheet "${target}" may be out of scope or not found (action: ${action}).`);
+    }
   }
 
   state.newlyAddedSheets = dedupeArray(state.newlyAddedSheets);
@@ -1295,8 +1349,12 @@ function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
 ========================= */
 
 function rebuildAllowedContextAfterEdits(originalSelectedSheets, executionState) {
-  const survivingBaseSheets = originalSelectedSheets.filter(name => !executionState.deletedSheets.includes(name));
-  const effectiveReadable = dedupeArray(survivingBaseSheets.concat(executionState.newlyAddedSheets));
+  // Use activeWritableSheets so renames are reflected (it is updated in-place by renameSheet).
+  // Fall back to original list if activeWritableSheets is somehow absent.
+  const base = (executionState.activeWritableSheets && executionState.activeWritableSheets.length > 0)
+    ? executionState.activeWritableSheets
+    : originalSelectedSheets;
+  const effectiveReadable = dedupeArray(base.filter(name => !executionState.deletedSheets.includes(name)));
   return {
     effectiveReadableSheets: effectiveReadable,
     contextString: buildContextForSheets(effectiveReadable)
@@ -1385,12 +1443,20 @@ CONTEXT GUIDANCE:
 - If useful, include formatting, sizing, merges, named ranges, notes, charts, and protections.
 - When working with merged cells, target the full merged range for later formatting/value edits.
 - For conditional formatting, use explicit exact ranges and explicit rule types.
+- DATA SCALE CONSISTENCY: When generating dummy or sample data, store duration/time columns (e.g., Average Handle Time) as plain numbers in a consistent unit (e.g., seconds: 265, 312, 198) — NOT as TIME() values or formatted strings. This avoids h:mm vs m:ss ambiguity and makes formula thresholds straightforward (e.g., C2<300 instead of C2<TIME(0,5,0)).
+- THRESHOLD CALIBRATION: Before writing any ARRAYFORMULA or conditional format threshold that references existing data, look at the actual values in WORKBOOK DATA IN SCOPE above. If a user specifies a threshold on a different scale than the data (e.g., user says 'CSAT > 90' but data is on a 1–5 scale, or 'AHT < 300' but AHT is stored as h:mm TIME values), adapt both consistently. Do not blindly apply the user's raw number to a mismatched scale.
 
 SUPPORTED EDITS:
 - Structural: addSheet, deleteSheet, renameSheet, duplicateSheet, moveSheet
-- Sheet: freeze, clear, clearContent, clearCharts
+  moveSheet REQUIRED fields: action, sheetName, newIndex (1-based integer; 1 = first tab, 2 = second, etc.)
+  Example: {"action": "moveSheet", "sheetName": "Executive_Summary", "newIndex": 1}
+- Sheet: freeze, clear, clearContent, clearCharts, clearConditionalFormat
   freeze REQUIRED fields: action, sheetName, and at least one of frozenRows or frozenColumns (integer, 0 to unfreeze).
   Example: {"action": "freeze", "sheetName": "Sheet1", "frozenRows": 1, "frozenColumns": 0}
+  clearConditionalFormat (sheet-level, no range): clears ALL conditional formatting rules on the sheet.
+  Example: {"action": "clearConditionalFormat", "sheetName": "Sheet1"}
+  clearConditionalFormat (range-level): clears rules whose ranges intersect the given range. Include "range".
+  Example: {"action": "clearConditionalFormat", "sheetName": "Sheet1", "range": "A2:E11"}
 - Data: appendRow, appendRows
 - Protection: protectRange
 - Merge: merge, unmerge
@@ -1399,6 +1465,11 @@ SUPPORTED EDITS:
   - startColumn + numColumns / startRow + numRows
   - or a range like "A:H" or "2:10"
 - Named ranges: addNamedRange, removeNamedRange
+  addNamedRange REQUIRED fields: action, sheetName, range (A1 notation), namedRangeName
+  Example: {"action": "addNamedRange", "sheetName": "Config", "range": "A1:A3", "namedRangeName": "StatusList"}
+  removeNamedRange REQUIRED fields: action, sheetName, namedRangeName
+  Example: {"action": "removeNamedRange", "sheetName": "Config", "namedRangeName": "StatusList"}
+  Note: sheetName is required for routing only (must be a writable sheet in scope). Named ranges are matched by name across the entire workbook — the removal is not filtered to the given sheet.
 - Charts: addChart
   REQUIRED: You MUST provide "sheetName", "range" (the anchor cell like "A15"), "chartData" (e.g., "A1:B10"), and "chartType" (e.g., PIE, BAR).
   Example:
@@ -1412,18 +1483,26 @@ SUPPORTED EDITS:
 - Data validation:
   {"type":"dropdown","values":["A","B"]}
   {"type":"dropdownFromRange","sourceSheet":"Sheet1","sourceRange":"A1:A10"}
+  {"type":"dropdownFromNamedRange","namedRangeName":"StatusList"}
   {"type":"checkbox"}
+  Note: Use "dropdownFromNamedRange" when a named range already exists in the workbook (e.g. created via addNamedRange). Use "dropdownFromRange" when referencing a raw sheet range directly.
+  ORDERING: If you create a named range with addNamedRange AND reference it with dropdownFromNamedRange in the same response, the addNamedRange edit MUST appear first in the edits array — named ranges are registered in array order and are not available until their addNamedRange edit has been processed.
 - Conditional formatting:
   Put it on a specific exact range and use one of these types:
   greaterThan, greaterThanOrEqualTo, lessThan, lessThanOrEqualTo, equalTo, notEqualTo,
   numberBetween, numberNotBetween, textEqualTo, textContains, textStartsWith, textEndsWith,
   empty, notEmpty, dateBefore, dateAfter, customFormula
-  Example:
+  Example (value-based):
   {"sheetName":"Sheet1","range":"C2:C20","conditionalFormat":{"type":"greaterThan","value":"100","color":"#c6efce"},"replaceConditionalFormat":true}
+  Example (customFormula — highlight entire row when column C > 320):
+  {"sheetName":"Sheet1","range":"A2:E11","conditionalFormat":{"type":"customFormula","formula":"=$C2>320","color":"#FFFF99"},"replaceConditionalFormat":true}
+  Note: For customFormula, use "formula" as the field name. Use absolute column + relative row (e.g. =$C2>320) so the rule evaluates correctly across the entire range.
 - Images:
   {"action":"insertImage","sheetName":"Dashboard","imageUrl":"https://...","row":1,"column":1}
+  IMPORTANT: imageUrl must be a direct, publicly accessible image URL (e.g. a raw GitHub image, Google-hosted image, or similar). Redirect-based services like via.placeholder.com or URL shorteners may fail. Use a reliable direct image URL such as https://dummyimage.com/150x150/000/fff.png or https://picsum.photos/150 instead.
 - Notes/comments:
   Use "note" on a range edit, or action "comment" with note
+  IMPORTANT: When the user asks you to add a note to a specific cell (e.g., "the Total Top Performers cell"), you MUST look up the exact A1 address of that cell from the WORKBOOK DATA IN SCOPE above before writing the edit. Do not guess row numbers.
 
 IMPORTANT DATA RULES:
 - BATCHING IS MANDATORY: Never create individual edit objects for single cells (e.g., A8, A9, A10...). Always use "values2D" to pass the entire data grid in one single edit object.
@@ -1522,17 +1601,15 @@ Rules:
       const finalNewSheets = dedupeArray(executionState.newlyAddedSheets.concat(correctionState.newlyAddedSheets));
       const finalWarnings = dedupeArray(executionState.executionWarnings.concat(correctionState.executionWarnings));
 
+      const finalDeletedSheets = dedupeArray(executionState.deletedSheets.concat(correctionState.deletedSheets));
       return JSON.stringify({
         message: (correctedResponseObj.message || "I corrected formula issues.") + "\n\n(Self-corrected a formula/data issue during execution.)",
         edits: correctedResponseObj.edits,
         newlyAddedSheets: finalNewSheets,
-        deletedSheets: dedupeArray(executionState.deletedSheets.concat(correctionState.deletedSheets)),
+        deletedSheets: finalDeletedSheets,
         scopeChanges: finalScopeChanges,
         updatedScope: dedupeArray(
-          selectedSheets
-            .filter(name => !executionState.deletedSheets.includes(name))
-            .filter(name => !correctionState.deletedSheets.includes(name))
-            .concat(finalNewSheets)
+          correctionState.activeWritableSheets.filter(name => !finalDeletedSheets.includes(name))
         ),
         machineSummary: {
           warnings: finalWarnings,
@@ -1549,9 +1626,7 @@ Rules:
       deletedSheets: executionState.deletedSheets,
       scopeChanges: executionState.scopeChanges,
       updatedScope: dedupeArray(
-        selectedSheets
-          .filter(name => !executionState.deletedSheets.includes(name))
-          .concat(executionState.newlyAddedSheets)
+        executionState.activeWritableSheets.filter(name => !executionState.deletedSheets.includes(name))
       ),
       machineSummary: {
         warnings: executionState.executionWarnings
