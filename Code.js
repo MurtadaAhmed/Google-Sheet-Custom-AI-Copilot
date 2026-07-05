@@ -1301,6 +1301,7 @@ function handleCellRangeActions(spreadsheet, edit, state) {
 function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
   if (!edits || edits.length === 0) {
     return {
+      activeWritableSheets: allowedReadSheets ? allowedReadSheets.slice() : [],
       newlyAddedSheets: [],
       deletedSheets: [],
       scopeChanges: [],
