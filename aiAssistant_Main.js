@@ -4,14 +4,14 @@
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('🤖 AI Assistant')
+    .createMenu('🤖 Agentic AI')
     .addItem('Open Chat', 'showSidebar')
     .addToUi();
 }
 
 function showSidebar() {
   const html = HtmlService.createHtmlOutputFromFile('Sidebar')
-    .setTitle('Sheet AI Assistant')
+    .setTitle('Sheet Agentic AI')
     .setWidth(360);
   SpreadsheetApp.getUi().showSidebar(html);
 }

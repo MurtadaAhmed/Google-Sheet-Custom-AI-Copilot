@@ -3,6 +3,7 @@
 ========================= */
 
 function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
+  /* checks for empty edits and returns gracefully without error if so */
   if (!edits || edits.length === 0) {
     return {
       activeWritableSheets: allowedReadSheets ? allowedReadSheets.slice() : [],
@@ -14,6 +15,7 @@ function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
     };
   }
 
+  /* tracks everything that happens during the execution loop */
   const state = {
     allowedReadSheets: allowedReadSheets.slice(),
     activeWritableSheets: allowedReadSheets.slice(),
@@ -24,10 +26,12 @@ function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
     executionWarnings: []
   };
 
+  /* the execution loop to process each edit one by one */
   for (let i = 0; i < edits.length; i++) {
     const edit = edits[i];
     if (!edit || typeof edit !== 'object') continue;
 
+    /* check the type of the edit */
     const handled =
       handleSheetStructureAction(spreadsheet, edit, state) ||
       handleFreezeClearAppendProtectActions(spreadsheet, edit, state) ||
@@ -35,6 +39,7 @@ function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
       handleChartActions(spreadsheet, edit, state) ||
       handleCellRangeActions(spreadsheet, edit, state);
 
+    /* warning message when no edit is applied */
     if (!handled) {
       const target = edit.sheetName || '(no sheet)';
       const action = edit.action || (edit.range ? 'range edit on ' + edit.range : 'unknown');
@@ -42,6 +47,7 @@ function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
     }
   }
 
+  /* ensure no duplicate records are sent to the front end */
   state.newlyAddedSheets = dedupeArray(state.newlyAddedSheets);
   state.deletedSheets = dedupeArray(state.deletedSheets);
   state.scopeChanges = dedupeArray(state.scopeChanges);
@@ -53,6 +59,7 @@ function applyEditsToSheet(spreadsheet, edits, allowedReadSheets) {
    FORMULA CORRECTION SUPPORT
 ========================= */
 
+/* update script understanding after applying edits */
 function rebuildAllowedContextAfterEdits(originalSelectedSheets, executionState) {
   // Use activeWritableSheets so renames are reflected (it is updated in-place by renameSheet).
   // Fall back to original list if activeWritableSheets is somehow absent.
