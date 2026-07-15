@@ -58,9 +58,17 @@ Below is an example dashboard with charts generated completely by the AI chatbot
 
 1. Open (or create) the Google Sheet you want to use.
 2. Click **Extensions → Apps Script** in the top menu.
-3. Delete any placeholder code already in the editor.
-4. Copy the contents of **`Code.js`** from this repository and paste it into the editor.
-5. Click the **+** icon next to "Files" in the left sidebar and choose **HTML**. Name it exactly `Sidebar` (no extension). Delete the default content and paste in the contents of **`Sidebar.html`**.
+3. The editor opens with a default `Code.gs` file. Rename it to `aiAssistant_Main` (click the three-dot menu next to the file name), delete the placeholder code, and paste in the contents of **`aiAssistant_Main.js`** from this repository.
+4. Click the **+** icon next to "Files" and choose **Script** for each of the following files. Name each file exactly as shown (no extension), then paste in the matching file contents:
+   - `aiAssistant_ApiClient`
+   - `aiAssistant_Context`
+   - `aiAssistant_Execution`
+   - `aiAssistant_Formatting`
+   - `aiAssistant_Handlers`
+   - `aiAssistant_State`
+   - `aiAssistant_Utils`
+   - `aiAssistant_Validation`
+5. Click **+** again and choose **HTML**. Name it exactly `Sidebar` (no extension), delete the default content, and paste in the contents of **`Sidebar.html`**.
 6. Click **Save** (the floppy disk icon, or `Ctrl+S` / `Cmd+S`).
 
 ### Step 2: Add your API settings
@@ -93,7 +101,7 @@ The script needs three pieces of information to connect to your AI provider. The
 
 1. Close the Apps Script editor tab.
 2. Reload your Google Sheet.
-3. A new menu item called **🤖 AI Assistant** will appear in the top menu bar. Click it and choose **Open Chat**.
+3. A new menu item called **🤖 Agentic AI** will appear in the top menu bar. Click it and choose **Open Chat**.
 
 > If the menu does not appear after reloading, go back to Apps Script, click **Run → onOpen**, and approve any permissions it asks for. Then reload the sheet.
 
@@ -128,7 +136,7 @@ Click **Manage active scope** (the collapsible section at the top of the chat vi
 
 ## Troubleshooting
 
-**The 🤖 AI Assistant menu doesn't appear**
+**The 🤖 Agentic AI menu doesn't appear**
 Run the `onOpen` function manually from the Apps Script editor (select it in the function dropdown and click ▶ Run), approve any permissions requested, then reload the sheet.
 
 **"AI_API_KEY not found in Script Properties"**
@@ -149,10 +157,18 @@ Reload the sheet and reopen the sidebar. If it persists, open Apps Script → Pr
 
 | File | Purpose |
 |---|---|
-| `Code.js` | All server-side logic: API calls, spreadsheet reading and editing, formula validation |
+| `aiAssistant_Main.js` | Entry points (`onOpen`, `showSidebar`) and the central `processChat()` orchestrator, including the agentic self-correction loop |
+| `aiAssistant_ApiClient.js` | HTTP call to the LLM (`fetchAiResponse`) and JSON extraction from the raw response (`parseAiResponse`) |
+| `aiAssistant_Context.js` | Reads selected sheets and builds the structured text context sent to the LLM as the system prompt |
+| `aiAssistant_Execution.js` | `applyEditsToSheet()` dispatch loop and formula error detection after edits are flushed |
+| `aiAssistant_Handlers.js` | Four specialized action handlers for sheet structure, freeze/clear/append/protect, merge/resize/named-ranges, charts, and cell/range edits |
+| `aiAssistant_Formatting.js` | Rich text formatting, data validation, and conditional formatting builder |
+| `aiAssistant_State.js` | Sidebar persistence via `PropertiesService` (selected sheets, session history, sheet name list) |
+| `aiAssistant_Utils.js` | Pure helper functions used across modules |
+| `aiAssistant_Validation.js` | Pre-flight edit validation and formula scope checking before any sheet is modified |
 | `Sidebar.html` | The chat panel UI that runs inside the Google Sheets sidebar |
-| `appsscript.json` | Apps Script project configuration |
-| `README.js` | Detailed technical documentation for developers |
+| `appsscript.json` | Apps Script project configuration (runtime, OAuth scopes, logging) |
+| `Technical Documentation.js` | Developer reference stored as a comment block (not executed) |
 
 ---
 

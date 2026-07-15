@@ -59,6 +59,10 @@ All three values below are read at runtime from Google Apps Script **Script Prop
 * **`AI_MODEL`:** The model identifier string (e.g., `gpt-4o`, `claude-sonnet-4-6`).
 * **Parameters:** `temperature: 0.1` (Low variance to ensure strict adherence to the JSON schema).
 
+### Content Normalisation (`extractMessageContent`)
+
+LLMs can return the message `content` field in several shapes: a plain string, a structured array of `{type, text}` parts (multi-modal), or nested objects. `extractMessageContent()` normalises all of these into a single plain string before any further parsing. It is called both during the initial response extraction and when assembling the correction-loop assistant turn.
+
 ### Strict JSON Parsing
 
 Because LLMs occasionally hallucinate markdown formatting (e.g., `json ... `) or append conversational text, `parseAiResponse()` does not rely on direct `JSON.parse()`.
@@ -116,12 +120,19 @@ The `applyEditsToSheet` function iterates through the validated JSON and routes 
 * **Actions:** `addSheet`, `deleteSheet`, `renameSheet`, `duplicateSheet`, `moveSheet`.
 * *Edge Case Handling:* Automatically resolves naming collisions. If `addSheet` is called for a name that already exists, it gracefully skips creation and simply brings the existing sheet into scope.
 
-### B. Formatting & Protection (`handleFreezeClearAppendProtectActions`)
+### B. Freeze, Clear, Append & Protect (`handleFreezeClearAppendProtectActions`)
 
-* **Actions:** `freeze`, `clear`, `clearContent`, `appendRow`, `appendRows`, `protectRange`.
+* **Actions:** `freeze`, `clear`, `clearContent`, `clearConditionalFormat` (sheet-level, no `range`), `appendRow`, `appendRows`, `protectRange`.
 * *Security Note:* `protectRange` automatically removes existing editors and adds the current `Session.getEffectiveUser()` unless instructed otherwise.
 
-### C. Cell Value Injection (`handleCellRangeActions`)
+### C. Merge, Resize & Named Ranges (`handleMergeResizeNamedRangeActions`)
+
+* **Actions:** `merge`, `unmerge`, `resizeColumn`, `resizeColumns`, `resizeRow`, `resizeRows`, `autoResizeColumns`, `autoResizeRows`, `addNamedRange`, `removeNamedRange`.
+* `merge` and `unmerge` both call `cleanupOverlappingMergedRanges` before executing to prevent GAS merge-conflict errors.
+* `autoResizeColumns` and `autoResizeRows` accept either `startColumn`/`numColumns` (or `startRow`/`numRows`) integers, or a `range` string — both are resolved to the same underlying GAS call.
+* `addNamedRange` calls `spreadsheet.setNamedRange()`, making it workbook-scoped; `removeNamedRange` iterates `spreadsheet.getNamedRanges()` and removes by name regardless of which sheet the range is on.
+
+### D. Cell Value Injection (`handleCellRangeActions`)
 
 This is the most complex handler, managing cell values, grids, and visual formatting.
 
@@ -132,7 +143,7 @@ This is the most complex handler, managing cell values, grids, and visual format
 
 * **Rich Formatting:** Maps LLM JSON keys (e.g., `backgroundColor`, `fontWeight`, `wrapStrategy`) directly to `SpreadsheetApp.Range` methods.
 
-### D. Chart Generation (`handleChartActions`)
+### E. Chart Generation (`handleChartActions`)
 
 * **Fallback Anchors:** If the LLM requests a chart but forgets to specify where to place it (`range`), the engine calculates `getLastRow() + 5` and drops the chart at the bottom of the data set.
 * **Dynamic Parsing:** Handles chart ranges whether the LLM provides them as an array `["A1:A10", "B1:B10"]` or a comma-separated string.
@@ -145,7 +156,7 @@ This is a critical reliability feature implemented in `processChat`.
 
 1. **Queueing:** During execution, any time a formula is injected into a cell, that A1 notation is pushed to `state.formulaRangesToInspect`.
 2. **Inspection (`collectFormulaIssues`):** After `SpreadsheetApp.flush()` applies all edits, the engine uses `getDisplayValues()` on the queued cells to check for `#ERROR`, `#REF!`, `#N/A`, `#VALUE!`, `#NAME?`, etc.
-3. **Self-Correction:** If an issue is found, the system *pauses returning the response to the user*. Instead, it appends a hidden `user` message to the payload: *"Your last edit caused formula/data issues. Detected issues: [Error Details]. Fix these issues..."*
+3. **Self-Correction:** If an issue is found, the system *pauses returning the response to the user*. Instead, it builds a two-turn correction payload: it appends the prior AI reply as a `role: "assistant"` message (normalised via `extractMessageContent`), followed by a `role: "user"` correction message describing the exact errors and the updated sheet context. This preserves a valid conversational turn structure for the LLM.
 4. **Re-Execution:** It makes a second, silent call to the LLM API, validates the new response, applies the fixes, and only then returns the combined result to the user UI, logging the correction in the `machineSummary`.
 
 ---
@@ -169,7 +180,7 @@ The script reads three values from **Script Properties** at runtime. These are n
 | `AI_MODEL` | The model identifier string accepted by the endpoint. | `gpt-4o` or `claude-sonnet-4-6` |
 
 4. Click **Save script properties** after adding all three.
-5. Reload the Google Sheet and open **🤖 AI Assistant → Open Chat** from the menu bar.
+5. Reload the Google Sheet and open **🤖 Agentic AI → Open Chat** from the menu bar.
 
 ### Notes
 

@@ -48,7 +48,6 @@ function sanitizeFormulaReferences(formula, allowedReadSheets, writableNewSheets
   return { ok: true };
 }
 
-
 function validateEdits(edits, allowedReadSheets, allowedWritableSheets) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   const existingSheetNames = spreadsheet.getSheets().map(s => s.getName());
